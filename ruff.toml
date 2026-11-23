@@ -1,0 +1,26 @@
+# Lint and format settings (ruff). Sublime Text runs the plugin with Python 3.8 (builds 4050 to
+# 4204) or 3.14 (4205 and later), so nothing newer than 3.8 is allowed.
+target-version = "py38"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "B", "I", "UP", "S", "BLE"]
+ignore = [
+  "E501",  # long lines: the formatter decides, strings stay whole
+  "S101",  # assert (tests)
+  "S310",  # urllib with a URL: the API's address is checked (https, or http on this computer)
+  "S108",  # temporary paths in tests
+  "UP031", # "%" formatting
+  "B904",  # raise … from: the API errors are meant to replace the low-level ones
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S603", "S607", "BLE001"]
+"e2e/*" = ["S603", "S607", "BLE001", "E402"]
+"scripts/*" = ["S603", "S607"]
+
+[lint.isort]
+known-third-party = ["sublime", "sublime_plugin"]
+
+[format]
+exclude = ["converterstudio/catalog.py"]

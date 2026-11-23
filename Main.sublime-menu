@@ -1,0 +1,25 @@
+[
+  {
+    "id": "preferences",
+    "children": [
+      {
+        "id": "package-settings",
+        "children": [
+          {
+            "caption": "Converter Studio",
+            "children": [
+              {
+                "caption": "Settings",
+                "command": "edit_settings",
+                "args": {
+                  "base_file": "${packages}/Converter Studio/Converter Studio.sublime-settings",
+                  "default": "// Converter Studio: your settings (the defaults are on the left)\n{\n\t$0\n}\n",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]

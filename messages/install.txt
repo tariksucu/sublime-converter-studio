@@ -1,0 +1,20 @@
+Converter Studio
+================
+
+Convert the file you are editing, or any file, from the Command Palette:
+
+    Converter Studio: Convert Current File…
+    Converter Studio: Convert File…
+
+Each format in the list says where it runs:
+
+  L  on this computer, with tools you already have (FFmpeg, LibreOffice,
+     Pandoc, ImageMagick, Ghostscript, Tesseract). Nothing is uploaded.
+  D  the Converter Studio desktop app, if you turn it on in the settings.
+  C  the Converter Studio cloud, only when you pick it: the file is then
+     uploaded to converter.studio and uses credits of your account.
+
+"Converter Studio: Show Local Tools" lists what was found on this computer.
+Settings: Preferences > Package Settings > Converter Studio.
+
+Privacy: https://converter.studio/privacy

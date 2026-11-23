@@ -1,0 +1,48 @@
+// Converter Studio: the default settings.
+// Change them in your own settings file: Preferences > Package Settings > Converter Studio.
+{
+  // --- 1. On this computer ---------------------------------------------------------------
+  // Conversions run first with the tools already installed on this computer, and nothing is
+  // uploaded. The tools are looked for on PATH and in their usual install folders; give a path
+  // here if one is somewhere else (an empty value means "look for it").
+  "tool_paths": {
+    "ffmpeg": "",
+    "soffice": "",
+    "pandoc": "",
+    "magick": "",
+    "gs": "",
+    "tesseract": "",
+  },
+
+  // A local conversion that takes longer than this many seconds is stopped.
+  "timeout_seconds": 600,
+
+  // Tesseract's language for text recognition (OCR): "eng", "deu", "tur", "eng+deu"…
+  // The language must be installed with Tesseract.
+  "ocr_language": "eng",
+
+  // --- 2. The Converter Studio desktop app -----------------------------------------------
+  // true: the picker also offers to hand files over to Converter Studio for desktop (version
+  // 0.1.11 or later, https://converter.studio/download). The app shows them with the format
+  // chosen, you press Convert there, and it converts on this computer.
+  "use_desktop_app": false,
+
+  // --- 3. The Converter Studio cloud -----------------------------------------------------
+  // Only used when you pick a cloud conversion: the file is then uploaded to converter.studio
+  // and the conversion uses credits of your account (https://converter.studio/privacy).
+
+  // true: list every cloud conversion in the picker (each one marked "cloud"). false: one row,
+  // "More formats in the cloud…", opens them.
+  "list_cloud_formats": false,
+
+  // Your API key, from https://converter.studio/account#api-keys.
+  // It is kept in PLAIN TEXT in your settings file: leave it empty and set the environment
+  // variable CONVERTER_STUDIO_API_KEY instead if your settings are synced or shared.
+  "api_key": "",
+
+  // The API's address (https; http only for a server on this computer).
+  "api_url": "https://converter.studio/api",
+
+  // A cloud conversion that costs more credits than this asks before it goes ahead.
+  "max_credits": 20,
+}

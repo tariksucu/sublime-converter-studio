@@ -1,0 +1,21 @@
+[
+  {
+    "caption": "Converter Studio: Convert Current File…",
+    "command": "converter_studio_convert_current_file",
+  },
+  { "caption": "Converter Studio: Convert File…", "command": "converter_studio_convert_file" },
+  { "caption": "Converter Studio: Cancel Conversion", "command": "converter_studio_cancel" },
+  { "caption": "Converter Studio: Show Local Tools", "command": "converter_studio_show_tools" },
+  {
+    "caption": "Converter Studio: Show Plan and Credits (Cloud)",
+    "command": "converter_studio_show_account",
+  },
+  {
+    "caption": "Preferences: Converter Studio Settings",
+    "command": "edit_settings",
+    "args": {
+      "base_file": "${packages}/Converter Studio/Converter Studio.sublime-settings",
+      "default": "// Converter Studio: your settings (the defaults are on the left)\n{\n\t$0\n}\n",
+    },
+  },
+]
