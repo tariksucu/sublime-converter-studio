@@ -20,7 +20,20 @@ class CsvJsonTest(TempDirTest):
 
     def test_csv_semicolons_duplicates_and_extra_cells(self):
         out = json.loads(self.convert("t.csv", "a;a;\n1;2;3;4\n", "t.json"))
-        self.assertEqual(out, [{"a": "1", "a_2": "2", "column3": "3", "_extra": ["4"]}])
+        self.assertEqual(out, [{"a": "1", "a_2": "2", "column3": "3", "column4": "4"}])
+
+    def test_column_names_are_all_different(self):
+        self.assertEqual(builtin._column_names(["column2"], 2), ["column2", "column2_2"])
+        self.assertEqual(builtin._column_names(["id", "id", "id_2"], 3), ["id", "id_3", "id_2"])
+        self.assertEqual(builtin._column_names(["", "column1"], 2), ["column1_2", "column1"])
+        self.assertEqual(builtin._separator("\r\na;b\n"), ";")
+        self.assertEqual(builtin._separator('"a;b",c\n'), ",")
+
+    def test_json_numbers_keep_their_digits(self):
+        out = self.convert("t.json", '[{"n": 12345678901234567890.5, "e": 1e400, "z": -0}]', "t.csv")
+        self.assertEqual(out, "n,e,z\r\n12345678901234567890.5,1e400,-0\r\n")
+        with self.assertRaises(builtin.ConversionError):
+            self.convert("t.json", '[{"n": NaN}]', "t.csv")
 
     def test_csv_in_utf16(self):
         out = json.loads(self.convert("t.csv", "x,y\n1,ü\n".encode("utf-16"), "t.json"))
@@ -47,6 +60,30 @@ class CsvJsonTest(TempDirTest):
         with self.assertRaises(builtin.ConversionError) as caught:
             self.convert("t.json", "{nope", "t.csv")
         self.assertIn("not valid JSON", str(caught.exception))
+
+
+class SharedDataCasesTest(TempDirTest):
+    """The cases every editor plugin runs (the same file in the VS Code, JetBrains and Neovim ones)."""
+
+    def test_shared_cases(self):
+        with open(os.path.join(os.path.dirname(__file__), "data-cases.json"), encoding="utf-8") as handle:
+            cases = json.load(handle)["cases"]
+        run = 0
+        for case in cases:
+            pair = (case["from"], case["to"])
+            if pair not in builtin.CONVERTERS:
+                continue
+            run += 1
+            with self.subTest("%s to %s: %s" % (pair + (case["name"],))):
+                source = self.write("in." + case["from"], case["input"])
+                target = os.path.join(self.dir, "out." + case["to"])
+                if case.get("error"):
+                    with self.assertRaises(builtin.ConversionError):
+                        builtin.converter(*pair)(source, target)
+                else:
+                    builtin.converter(*pair)(source, target)
+                    self.assertEqual(self.read("out." + case["to"]), case["output"])
+        self.assertEqual(run, len([c for c in cases if c["to"] != "yaml"]))
 
 
 SRT = "1\r\n00:00:01,000 --> 00:00:02,500\r\nHello\r\n<i>world</i>\r\n\r\n2\r\n00:01:02,5 --> 00:01:03,000\r\nBye\r\n"

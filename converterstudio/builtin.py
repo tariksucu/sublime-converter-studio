@@ -4,8 +4,6 @@ Each converter reads the source file and writes the target file; it raises Conve
 a sentence for the user when the source is not what it should be.
 """
 
-import csv
-import io
 import json
 import re
 
@@ -32,55 +30,165 @@ def _write_text(path, text):
 
 
 # -- CSV and JSON ------------------------------------------------------------------------------
+#
+# Nothing is dropped or changed on the way: every column gets a name of its own, numbers keep the
+# digits they were written with (9007199254740993 stays exact), and keys keep their order. The
+# Converter Studio extensions for VS Code, JetBrains IDEs and Neovim follow the same rules and run
+# the same cases (tests/data-cases.json), so a file gives the same result in each.
+
+_SEPARATORS = ",;\t|"
 
 
-def _delimiter(text):
-    """The separator of a CSV file: the most frequent of , ; tab | on its first line (, on a tie)."""
-    first = next((line for line in text.splitlines() if line.strip()), "")
-    counts = [(first.count(d), -i, d) for i, d in enumerate(",;\t|")]
-    best = max(counts)
-    return best[2] if best[0] else ","
+def _separator(text):
+    """The field separator of a CSV: comma, semicolon, tab or |, whichever its first line uses most
+    outside quotes (the earlier of them on a tie; a comma when there is none)."""
+    counts = dict.fromkeys(_SEPARATORS, 0)
+    quoted = False
+    for char in text.lstrip("\ufeff").lstrip("\r\n"):
+        if char == '"':
+            quoted = not quoted
+        elif not quoted and char in "\r\n":
+            break
+        elif not quoted and char in counts:
+            counts[char] += 1
+    best = ","
+    for separator in _SEPARATORS[1:]:
+        if counts[separator] > counts[best]:
+            best = separator
+    return best
+
+
+def _parse_csv(text, separator):
+    """The rows of a CSV (RFC 4180: quoted fields, doubled quotes, line breaks inside quotes)."""
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    rows, row, field = [], [], []
+    quoted = was_quoted = False
+    i, n = 0, len(text)
+    while i < n:
+        char = text[i]
+        if quoted:
+            if char != '"':
+                field.append(char)
+            elif i + 1 < n and text[i + 1] == '"':
+                field.append('"')
+                i += 1
+            else:
+                quoted = False
+        elif char == '"' and not field and not was_quoted:
+            quoted = was_quoted = True
+        elif char == separator:
+            row.append("".join(field))
+            field, was_quoted = [], False
+        elif char in "\r\n":
+            if char == "\r" and i + 1 < n and text[i + 1] == "\n":
+                i += 1
+            row.append("".join(field))
+            rows.append(row)
+            row, field, was_quoted = [], [], False
+        else:
+            field.append(char)
+        i += 1
+    if quoted:
+        raise ConversionError("The CSV file ends inside a quoted field.")
+    if field or was_quoted or row:
+        row.append("".join(field))
+        rows.append(row)
+    # Blank lines are not records.
+    return [r for r in rows if r != [""]]
+
+
+def _column_names(header, width):
+    """A name for each of `width` columns, every one different, so that no value is lost:
+
+    - the first column with a header name keeps it;
+    - any other column (a repeated name, an empty header cell, a cell beyond the header) gets its
+      header name, or column<N> (N counted from 1) when it has none, followed by _2, _3...: the
+      first that no column has taken yet.
+
+    `id,id` gives id, id_2; a header `column2` with a row `A,B` gives column2, column2_2.
+    """
+    names = [None] * width
+    taken = set()
+    for index, raw in enumerate(header):
+        name = raw.strip(" \t\r\n")
+        if name and name not in taken:
+            names[index] = name
+            taken.add(name)
+    for index in range(width):
+        if names[index] is not None:
+            continue
+        base = (header[index] if index < len(header) else "").strip(" \t\r\n") or "column%d" % (index + 1)
+        name, n = base, 2
+        while name in taken:
+            name, n = "%s_%d" % (base, n), n + 1
+        names[index] = name
+        taken.add(name)
+    return names
 
 
 def csv_to_json(source, target):
-    """A CSV file with a header row → a JSON array of objects (values stay text)."""
+    """A CSV file with a header row -> a JSON array of objects (values stay text). Every object has
+    every column, in the file's order; a cell a row does not have is empty."""
     text = _read_text(source)
-    reader = csv.reader(io.StringIO(text), delimiter=_delimiter(text))
-    rows = [row for row in reader if any(cell.strip() for cell in row)]
+    rows = _parse_csv(text, _separator(text))
     if not rows:
         raise ConversionError("The CSV file is empty.")
-    header = [name.strip() or "column%d" % (i + 1) for i, name in enumerate(rows[0])]
-    seen = {}
-    for i, name in enumerate(header):
-        if name in seen:
-            seen[name] += 1
-            header[i] = "%s_%d" % (name, seen[name])
-        else:
-            seen[name] = 1
-    records = []
-    for row in rows[1:]:
-        row = row + [""] * (len(header) - len(row))
-        record = dict(zip(header, row))
-        if len(row) > len(header):
-            record["_extra"] = row[len(header) :]
-        records.append(record)
+    header, rows = rows[0], rows[1:]
+    names = _column_names(header, max(len(row) for row in [header] + rows))
+    records = [{name: (row[i] if i < len(row) else "") for i, name in enumerate(names)} for row in rows]
     _write_text(target, json.dumps(records, ensure_ascii=False, indent=2) + "\n")
+
+
+class _Number:
+    """A JSON number as the file writes it: its text is kept, so no digit is lost or changed."""
+
+    __slots__ = ("text",)
+
+    def __init__(self, text):
+        self.text = text
+
+
+def _no_constant(name):
+    raise ValueError("%s is not a JSON value" % name)
+
+
+def _compact(value):
+    """A value as compact JSON (a list or object in a CSV cell), numbers as written."""
+    if isinstance(value, _Number):
+        return value.text
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return "[" + ",".join(_compact(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(_compact(k) + ":" + _compact(v) for k, v in value.items()) + "}"
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _cell(value):
     if value is None:
         return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    return str(value)
+    if isinstance(value, str):
+        return value
+    return _compact(value)
+
+
+def _csv_field(text):
+    """A CSV field, in double quotes when it holds a comma, a quote or a line break, or starts or ends
+    with a space or tab."""
+    if any(c in text for c in ',"\r\n') or text[:1] in (" ", "\t") or text[-1:] in (" ", "\t"):
+        return '"' + text.replace('"', '""') + '"'
+    return text
 
 
 def json_to_csv(source, target):
-    """A JSON array of objects (or one object, or an object holding one such array) → CSV."""
+    """A JSON array of objects (or one object, or an object holding one such array) -> CSV."""
     try:
-        data = json.loads(_read_text(source))
+        # Numbers keep their text: a float would change 0.1000000000000000055 and 1E400.
+        data = json.loads(_read_text(source), parse_int=_Number, parse_float=_Number, parse_constant=_no_constant)
     except ValueError as error:
         raise ConversionError("The file is not valid JSON (%s)." % error)
     if isinstance(data, dict):
@@ -94,26 +202,26 @@ def json_to_csv(source, target):
         data = tables[0] if len(tables) == 1 else [data]
     if not isinstance(data, list) or not data:
         raise ConversionError('A table needs a JSON array of objects, such as [{"name": "Ada"}].')
-    columns = []
+    columns, seen = [], set()
     for item in data:
         if isinstance(item, dict):
             for key in item:
-                if key not in columns:
+                if key not in seen:
+                    seen.add(key)
                     columns.append(key)
-    out = io.StringIO()
-    writer = csv.writer(out, lineterminator="\r\n")
+    lines = []
     if columns:
-        writer.writerow(columns)
+        lines.append(columns)
         for item in data:
             if isinstance(item, dict):
-                writer.writerow([_cell(item.get(key)) for key in columns])
+                lines.append([_cell(item.get(key)) for key in columns])
             else:
-                writer.writerow([_cell(item)] + [""] * (len(columns) - 1))
+                lines.append([_cell(item)] + [""] * (len(columns) - 1))
     else:
         # An array of plain values or of arrays.
         for item in data:
-            writer.writerow([_cell(v) for v in item] if isinstance(item, list) else [_cell(item)])
-    _write_text(target, out.getvalue())
+            lines.append([_cell(v) for v in item] if isinstance(item, list) else [_cell(item)])
+    _write_text(target, "".join(",".join(_csv_field(c) for c in line) + "\r\n" for line in lines))
 
 
 # -- subtitles ---------------------------------------------------------------------------------

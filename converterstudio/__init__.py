@@ -15,7 +15,7 @@ Three ways to convert a file, in this order:
 """
 
 # Kept equal to the newest version in CHANGELOG.md and the release tag (a unit test checks it).
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # Names this package to the API (X-Converter-Studio-Client), for converter.studio's statistics.
 CLIENT = "sublime-text"
